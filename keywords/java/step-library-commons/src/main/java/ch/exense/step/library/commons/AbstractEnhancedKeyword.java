@@ -21,6 +21,7 @@ import step.handlers.javahandler.AbstractKeyword;
 import step.streaming.common.QuotaExceededException;
 
 import java.io.File;
+import java.nio.file.Path;
 
 /**
  * An Enhanced Abstract keyword using the onError function for
@@ -55,12 +56,20 @@ public class AbstractEnhancedKeyword extends AbstractKeyword {
             if (!f.exists()) {
                 throw new BusinessException("File '" + f.getCanonicalPath() + "' cannot be found!");
             }
+
             if (f.isDirectory()) {
-                File directory = f;
-                f = new File(f.getCanonicalPath() + ".zip");
-                FileHelper.zip(directory, f);
+                File tempFolder = FileHelper.createTempFolder();
+                Path fileName = f.toPath().getFileName();
+                Path zippedDirectory = tempFolder.toPath().resolve(fileName + ".zip");
+                FileHelper.zip(f, zippedDirectory.toFile());
+                try {
+                    liveReporting.fileUploads.startBinaryFileUpload(zippedDirectory.toFile()).complete();
+                } finally {
+                    FileHelper.deleteFolder(tempFolder);
+                }
+            } else {
+                liveReporting.fileUploads.startBinaryFileUpload(f).complete();
             }
-            liveReporting.fileUploads.startBinaryFileUpload(f).complete();
         } catch(QuotaExceededException e) {
             throw new BusinessException("Maximum attachment size reached",e);
         } catch (Exception e) {
